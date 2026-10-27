@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4ef">
+  <meta name="description" content="Browse TERI research and ask questions grounded in the reports.">
+  <title>TERI Reports Library</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="TERI Reports Library home">
+      <span class="brand-mark" aria-hidden="true">T</span>
+      <span class="brand-copy"><strong>TERI</strong><span>Reports Library</span></span>
+    </a>
+    <nav class="primary-nav" aria-label="Main navigation">
+      <a href="#library" data-nav="library">Library</a>
+      <a href="#ask" data-nav="ask">Ask the reports</a>
+      <a href="#about" data-nav="about">About</a>
+    </nav>
+    <a class="header-admin" href="#admin">Admin <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-dot"></span> RESEARCH, OPENLY ACCESSIBLE</p>
+        <h1 id="hero-title">Ideas for a<br><em>sustainable future.</em></h1>
+        <p class="hero-intro">Explore TERI research on energy, climate and sustainable development. Search the collection or ask a question grounded in the reports.</p>
+        <a class="hero-link" href="#library">Explore the library <span aria-hidden="true">↓</span></a>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="sun"></div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+        <div class="horizon"></div><div class="hill hill-back"></div><div class="hill hill-front"></div>
+        <div class="wind wind-one"><i></i><b></b><span></span></div>
+        <div class="wind wind-two"><i></i><b></b><span></span></div>
+        <div class="solar-field"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="hero-art-label"><span>KNOWLEDGE<br>FOR ACTION</span><span class="label-line"></span></div>
+      </div>
+      <div class="hero-bottom"><span>NEW DELHI · INDIA</span><span>RESEARCH ARCHIVE <b>01—22</b></span></div>
+    </section>
+
+    <section class="stats-strip" aria-label="Library overview">
+      <div><strong id="stat-reports">—</strong><span>reports in the collection</span></div>
+      <div><strong>2018—2026</strong><span>publication years in this collection</span></div>
+      <div><strong>OPEN</strong><span>report-grounded answers</span></div>
+    </section>
+
+    <section class="library-section section-wrap" id="library" aria-labelledby="library-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">THE COLLECTION</p><h2 id="library-title">Research, made findable.</h2></div>
+        <p class="section-note">Reports and working papers from TERI’s research on India’s transition to a more sustainable future.</p>
+      </div>
+      <div class="search-row">
+        <label class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><span class="visually-hidden">Search reports</span><input id="report-search" type="search" placeholder="Search topics, titles, authors…" autocomplete="off"><kbd>/</kbd></label>
+        <div id="result-count" class="result-count" aria-live="polite"></div>
+      </div>
+      <div id="report-grid" class="report-grid" aria-live="polite"><div class="loading-state">Loading reports <span class="spinner" aria-hidden="true"></span></div></div>
+      <div id="empty-search" class="empty-state" hidden><span class="empty-mark">⌕</span><h3>No reports found</h3><p>Try another title, topic or keyword.</p></div>
+    </section>
+
+    <section class="ask-section" id="ask" aria-labelledby="ask-title">
+      <div class="ask-inner section-wrap">
+        <div class="ask-intro">
+          <p class="eyebrow eyebrow-light"><span class="eyebrow-dot"></span> ASK TERI REPORTS</p>
+          <h2 id="ask-title">A better question<br><em>starts with evidence.</em></h2>
+          <p>Ask about a report or a topic. Answers are assembled from searchable report text and linked to the page they come from.</p>
+          <div class="local-note"><span aria-hidden="true">◎</span><span><strong>Grounded in the library</strong><br>No external AI service is used.</span></div>
+        </div>
+        <div class="ask-card">
+          <div class="ask-card-top"><span>REPORT RESEARCH ASSISTANT</span><span class="status-pill"><i></i> GROUNDED IN REPORTS</span></div>
+          <form id="ask-form">
+            <label for="question">What would you like to know?</label>
+            <textarea id="question" rows="3" maxlength="1200" placeholder="For example: What does the report say about energy storage?" required></textarea>
+            <div class="ask-form-bottom"><span>Answers include source passages and page links.</span><button class="button button-ink" type="submit">Search the reports <span aria-hidden="true">↗</span></button></div>
+          </form>
+          <div class="suggestions" aria-label="Suggested questions">
+            <button type="button" class="suggestion" data-question="What recommendations do the reports make about energy storage?">Recommendations on energy storage <span>↗</span></button>
+            <button type="button" class="suggestion" data-question="Summarize Solar Plus Storage Cost Analysis Paper">Summarize a report <span>↗</span></button>
+          </div>
+          <div id="answer-area" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="about-section section-wrap" id="about" aria-labelledby="about-title">
+      <div class="about-index"><span>01</span><span>ABOUT THIS LIBRARY</span></div>
+      <div class="about-content"><h2 id="about-title">Research that<br>moves us forward.</h2><div class="about-body"><p>This library brings TERI reports together in one searchable place. Each document stays intact, with its own report page, metadata and original file link.</p><p>The question assistant uses local text extraction and keyword retrieval. It shows report passages with page citations instead of generating claims from general model knowledge. Scanned pages, charts and complex tables may not be fully searchable.</p><a class="text-link" href="#library">Return to the collection <span>↑</span></a></div></div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><a class="footer-brand" href="#main">TERI <span>REPORTS LIBRARY</span></a><span>KNOWLEDGE FOR A SUSTAINABLE FUTURE</span><span>PUBLIC LIBRARY · REPORT-GROUNDED</span></footer>
+
+  <dialog id="report-dialog" class="report-dialog" aria-labelledby="detail-title"><button class="dialog-close" aria-label="Close report details">×</button><div id="report-detail"></div></dialog>
+
+    <dialog id="admin-dialog" class="admin-dialog" aria-labelledby="admin-title"><button class="dialog-close" aria-label="Close admin panel">×</button><div class="admin-content"><p class="eyebrow">LIBRARY MANAGEMENT</p><h2 id="admin-title">Add a report</h2><p class="admin-description">Sign in with an authorized library account. PDFs and searchable text are stored in the library’s Supabase project. No external AI service is used.</p><form id="admin-auth-form"><label for="admin-email">Admin email</label><input id="admin-email" type="email" autocomplete="username" required><label for="admin-password">Password</label><div class="token-row"><input id="admin-password" type="password" autocomplete="current-password" required><button class="button button-ink" type="submit">Sign in</button></div></form><div id="admin-upload-area" hidden><form id="upload-form"><label for="upload-file">Choose a PDF report</label><input id="upload-file" name="report" type="file" accept="application/pdf,.pdf" required><p class="form-hint">PDF only · maximum file size 50 MB</p><button class="button button-ink" type="submit">Add to library <span aria-hidden="true">↗</span></button></form><button id="admin-signout" class="text-link" type="button">Sign out</button></div><div id="admin-message" class="admin-message" aria-live="polite"></div><p class="admin-setup">Configure Supabase and authorize admin accounts using the setup steps in the project README.</p></div></dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
