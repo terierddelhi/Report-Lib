@@ -33,12 +33,10 @@ This project contains the 22 PDF copies and a generated SQLite index. If regener
 
 ```powershell
 $env:SUPABASE_URL = 'https://YOUR_PROJECT_REF.supabase.co'
-$env:SUPABASE_SERVICE_ROLE_KEY = 'YOUR_SERVICE_ROLE_KEY'
 python scripts/sync_supabase.py
-Remove-Item Env:\SUPABASE_SERVICE_ROLE_KEY
 ```
 
-The script uploads the PDF files and copies report metadata, sections and page passages from SQLite. It is safe to rerun: it replaces the stored object and refreshes passages for each report. The service-role key is read only from the process environment. Do not commit it, paste it into `static/config.js`, or add it as a GitHub variable.
+The script prompts for the Supabase service-role key without echoing it. Enter the key directly at that prompt; do not put it in a command, paste it into chat, commit it, add it to `static/config.js`, or save it as a GitHub variable. The script uploads the PDF files and copies report metadata, sections and page passages from SQLite. It is safe to rerun: it replaces the stored object and refreshes passages for each report.
 
 ## 3. Deploy the site with GitHub Pages
 
