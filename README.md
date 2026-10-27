@@ -29,7 +29,7 @@ After the first GitHub Pages deployment, add the site URL shown by GitHub under 
 
 ## 2. Move the current library into Supabase
 
-This project contains the 22 PDF copies and a generated SQLite index. If regenerating the index, install Python 3.10+ and run `start.ps1` once; stop the local server after it finishes indexing. Then run the migration from PowerShell in this folder:
+Before migrating, make sure this local folder contains the generated `data/library.sqlite3` and the PDF copies in `data/reports/`. These source files are ignored by `.gitignore` and are not published to GitHub. If regenerating the index, install Python 3.10+ and run `start.ps1` once; stop the local server after it finishes indexing. Then run the migration from PowerShell in this folder:
 
 ```powershell
 $env:SUPABASE_URL = 'https://YOUR_PROJECT_REF.supabase.co'
