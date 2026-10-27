@@ -294,7 +294,7 @@ $("#admin-signout").addEventListener("click", async () => {
   $("#admin-message").textContent = "Signed out.";
 });
 
-$(document).addEventListener("keydown", event => {
+document.addEventListener("keydown", event => {
   if (event.key === "/" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) && !reportDialog.open && !adminDialog.open) { event.preventDefault(); $("#report-search").focus(); }
   if (event.key === "Escape" && location.hash.startsWith("#report=")) history.replaceState(null, "", location.pathname + location.search);
 });
