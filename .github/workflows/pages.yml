@@ -1,0 +1,42 @@
+name: Deploy TERI Reports Library
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Prepare static site and Supabase config
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || (echo "Set the SUPABASE_URL repository variable" && exit 1)
+          test -n "$SUPABASE_ANON_KEY" || (echo "Set the SUPABASE_ANON_KEY repository variable" && exit 1)
+          mkdir -p _site
+          cp -R static/. _site/
+          cat > _site/config.js <<EOF
+          window.TERI_SUPABASE = { url: "$SUPABASE_URL", anonKey: "$SUPABASE_ANON_KEY" };
+          EOF
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
