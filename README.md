@@ -41,13 +41,11 @@ The script prompts for the Supabase service-role key without echoing it. Enter t
 ## 3. Deploy the site with GitHub Pages
 
 1. Create a GitHub repository and push this project to its `main` branch. The report PDFs and local SQLite database are ignored by `.gitignore`; do not force-add them.
-2. In the repository, open **Settings → Secrets and variables → Actions → Variables** and add:
-   - `SUPABASE_URL` — the project URL from Supabase.
-   - `SUPABASE_ANON_KEY` — the public anon/publishable key from Supabase. It is safe to expose in a browser when the schema's RLS policies are enabled.
+2. Put the Supabase project URL and public anon/publishable key in `static/config.js`. This browser-facing key is public by design; the schema's RLS and Storage policies restrict changes to authorized admins. Never put the service-role key in this file.
 3. Open **Settings → Pages** and choose **GitHub Actions** as the build and deployment source.
 4. Push to `main` or run **Deploy TERI Reports Library** from the Actions tab. GitHub Pages will show the public site URL in the deployment result. For a project repository it is usually `https://YOUR_GITHUB_NAME.github.io/REPOSITORY_NAME/`.
 
-The workflow generates `config.js` during deployment, so project credentials are not stored in the source files. The Supabase anon key is public by design; database and Storage policies enforce read-only public access and admin-only changes.
+The workflow copies `static/config.js` into the published site. The Supabase anon key is public by design; database and Storage policies enforce read-only public access and admin-only changes.
 
 ## Admin uploads
 

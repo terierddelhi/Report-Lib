@@ -77,7 +77,9 @@ def main():
         if not source.is_file():
             print(f"[{number}/{len(reports)}] Skipping missing PDF: {source.name}")
             continue
-        object_path = f"{report['id']}/{report['filename']}"
+        # Keep Storage object names ASCII and stable. Source filenames can contain
+        # Unicode punctuation that Supabase Storage rejects even when URL-encoded.
+        object_path = f"{report['id']}/report.pdf"
         quoted_path = "/".join(urllib.parse.quote(part, safe="") for part in object_path.split("/"))
         with source.open("rb") as pdf:
             request(f"/storage/v1/object/reports/{quoted_path}", method="POST", body=pdf.read(),
