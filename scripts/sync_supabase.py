@@ -10,6 +10,7 @@ import json
 import os
 import sqlite3
 import sys
+import getpass
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -58,8 +59,13 @@ def batched(rows):
 
 
 def main():
-    if not BASE_URL or not KEY:
-        sys.exit("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY first.")
+    global KEY
+    if not BASE_URL:
+        sys.exit("Set SUPABASE_URL first.")
+    if not KEY:
+        KEY = getpass.getpass("Supabase service-role key (input hidden): ").strip()
+    if not KEY:
+        sys.exit("No service-role key entered.")
     if not DB.exists():
         sys.exit(f"Local index not found: {DB}. Start the local app once to build it.")
     con = sqlite3.connect(DB)
