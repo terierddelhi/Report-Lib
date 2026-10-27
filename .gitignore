@@ -1,0 +1,10 @@
+# Report PDFs and the local SQLite index belong in Supabase, not the Git repo.
+data/reports/*
+!data/reports/.gitkeep
+data/library.sqlite3*
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
