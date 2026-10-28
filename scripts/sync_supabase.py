@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "library.sqlite3"
 REPORTS = ROOT / "data" / "reports"
+METADATA_OVERRIDES = json.loads((ROOT / "scripts" / "metadata_overrides.json").read_text(encoding="utf-8"))
 BASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 BATCH_SIZE = 200
@@ -85,6 +86,7 @@ def main():
             request(f"/storage/v1/object/reports/{quoted_path}", method="POST", body=pdf.read(),
                     content_type="application/pdf", extra_headers={"x-upsert": "true"})
         row = dict(report)
+        row.update(METADATA_OVERRIDES.get(report["id"], {}))
         row["warnings"] = json.loads(row.get("warnings") or "[]")
         row["object_path"] = object_path
         row["indexed_at"] = datetime.now(timezone.utc).isoformat()

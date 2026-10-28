@@ -36,7 +36,7 @@ $env:SUPABASE_URL = 'https://YOUR_PROJECT_REF.supabase.co'
 python scripts/sync_supabase.py
 ```
 
-The script prompts for the Supabase service-role key without echoing it. Enter the key directly at that prompt; do not put it in a command, paste it into chat, commit it, add it to `static/config.js`, or save it as a GitHub variable. The script uploads the PDF files and copies report metadata, sections and page passages from SQLite. It is safe to rerun: it replaces the stored object and refreshes passages for each report.
+The script prompts for the Supabase service-role key without echoing it. Enter the key directly at that prompt; do not put it in a command, paste it into chat, commit it, add it to `static/config.js`, or save it as a GitHub variable. The script uploads the PDF files and copies report metadata, sections and page passages from SQLite. Verified cover-page titles and authors in `scripts/metadata_overrides.json` take precedence over embedded PDF metadata. Run `python scripts/apply_metadata_overrides.py` to apply those corrections to the local index; the sync script also applies them when publishing metadata to Supabase. It is safe to rerun: it replaces the stored object and refreshes passages for each report.
 
 ## 3. Deploy the site with GitHub Pages
 

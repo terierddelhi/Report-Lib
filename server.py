@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
 REPORTS_DIR = ROOT / "data" / "reports"
 DB_PATH = ROOT / "data" / "library.sqlite3"
+METADATA_OVERRIDES = json.loads((ROOT / "scripts" / "metadata_overrides.json").read_text(encoding="utf-8"))
 MAX_UPLOAD = 80 * 1024 * 1024
 ADMIN_TOKEN = os.environ.get("TERI_ADMIN_TOKEN", "")
 HOST = os.environ.get("TERI_HOST", "127.0.0.1")
@@ -256,11 +257,12 @@ def ingest_pdf(path: Path) -> dict:
     reader, page_data, low_text_pages, section_starts = pages_text(path)
     all_text = "\n".join(item[1] for item in page_data)
     metadata = reader.metadata
-    title = display_title(metadata, path.name, all_text[:3000])
-    authors = str(metadata.get("/Author", "")).strip()[:200] if metadata else ""
+    report_id = hashlib.sha256(path.name.encode("utf-8") + str(path.stat().st_size).encode()).hexdigest()[:18]
+    override = METADATA_OVERRIDES.get(report_id, {})
+    title = override.get("title") or display_title(metadata, path.name, all_text[:3000])
+    authors = override.get("authors", str(metadata.get("/Author", "")).strip()[:200] if metadata else "")
     published = publication_date(metadata, all_text[:3000])
     summary = extractive_summary(page_data)
-    report_id = hashlib.sha256(path.name.encode("utf-8") + str(path.stat().st_size).encode()).hexdigest()[:18]
     # Flag sparse extraction without claiming the original PDF itself is incomplete.
     warnings = []
     if low_text_pages:
