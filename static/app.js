@@ -5,6 +5,26 @@ const config = window.TERI_SUPABASE || {};
 const configured = Boolean(config.url && config.anonKey && window.supabase?.createClient);
 if (configured) state.supabase = window.supabase.createClient(config.url, config.anonKey);
 
+const revealObserver = "IntersectionObserver" in window ? new IntersectionObserver(entries => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) {
+      entry.target.classList.add("is-visible");
+      revealObserver.unobserve(entry.target);
+    }
+  }
+}, { threshold: 0.12, rootMargin: "0px 0px -36px 0px" }) : null;
+
+function observeReveals(root = document) {
+  const targets = root.querySelectorAll("[data-reveal]:not(.is-visible)");
+  if (!revealObserver) {
+    targets.forEach(target => target.classList.add("is-visible"));
+    return;
+  }
+  targets.forEach(target => revealObserver.observe(target));
+}
+
+observeReveals();
+
 function publicPdfUrl(report) {
   return state.supabase.storage.from("reports").getPublicUrl(report.object_path).data.publicUrl;
 }
@@ -34,13 +54,14 @@ async function loadReports(query = "") {
     }
     $("#stat-reports").textContent = String(state.reports.length).padStart(2, "0");
     $("#result-count").textContent = query ? `${reports.length} result${reports.length === 1 ? "" : "s"}` : `${reports.length} reports`;
-    grid.innerHTML = reports.map(report => `
-      <article class="report-card">
+    grid.innerHTML = reports.map((report, index) => `
+      <article class="report-card" data-reveal="up" style="--reveal-delay:${(index % 3) * 70}ms">
         <div class="card-meta"><span class="card-type">TERI REPORT</span><span>${escapeHtml(report.published || "Publication date n/a")}</span></div>
         <h3>${escapeHtml(report.title)}</h3>
         <p class="summary">${escapeHtml(report.summary)}</p>
         <div class="card-footer"><span class="page-info">${report.pages} pages${report.authors ? ` · ${escapeHtml(report.authors)}` : ""}</span><button class="card-open" data-open-report="${escapeHtml(report.id)}">View report <span aria-hidden="true">↗</span></button></div>
       </article>`).join("");
+    observeReveals(grid);
     const empty = reports.length === 0;
     $("#empty-search").hidden = !empty;
     grid.hidden = empty;
@@ -302,6 +323,27 @@ document.addEventListener("keydown", event => {
 document.querySelectorAll("[data-nav]").forEach(link => link.addEventListener("click", () => {
   document.querySelectorAll("[data-nav]").forEach(item => item.classList.toggle("active", item === link));
 }));
+
+const siteHeader = $(".site-header");
+let scrollUpdatePending = false;
+window.addEventListener("scroll", () => {
+  if (scrollUpdatePending) return;
+  scrollUpdatePending = true;
+  requestAnimationFrame(() => {
+    siteHeader.classList.toggle("scrolled", window.scrollY > 24);
+    scrollUpdatePending = false;
+  });
+}, { passive: true });
+
+if ("IntersectionObserver" in window) {
+  const sectionObserver = new IntersectionObserver(entries => {
+    const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (!visible) return;
+    const activeId = visible.target.id;
+    document.querySelectorAll("[data-nav]").forEach(link => link.classList.toggle("active", link.dataset.nav === activeId));
+  }, { rootMargin: "-28% 0px -58% 0px", threshold: [0, .15, .35] });
+  document.querySelectorAll("#library, #ask, #about").forEach(section => sectionObserver.observe(section));
+}
 
 loadReports().then(() => {
   const match = location.hash.match(/^#report=(.+)$/);

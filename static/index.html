@@ -3,21 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f5f4ef">
+  <meta name="theme-color" content="#f4f6f1">
   <meta name="description" content="Browse TERI research and ask questions grounded in the reports.">
   <title>TERI Reports Library</title>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=5">
+  <script>document.documentElement.classList.add('js');</script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="./config.js"></script>
-  <script src="./app.js?v=3" defer></script>
+  <script src="./app.js?v=5" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="./" aria-label="TERI Reports Library home">
-      <span class="brand-mark" aria-hidden="true">T</span>
-      <span class="brand-copy"><strong>TERI</strong><span>Reports Library</span></span>
+      <img class="teri-logo" src="./teri-logo.png" alt="The Energy and Resources Institute">
+      <span class="brand-divider" aria-hidden="true"></span>
+      <span class="brand-product">Reports<br>Library</span>
     </a>
     <nav class="primary-nav" aria-label="Main navigation">
       <a href="#library" data-nav="library">Library</a>
@@ -29,13 +34,13 @@
 
   <main id="main">
     <section class="hero" aria-labelledby="hero-title">
-      <div class="hero-copy">
+      <div class="hero-copy" data-reveal="left">
         <p class="eyebrow"><span class="eyebrow-dot"></span> RESEARCH, OPENLY ACCESSIBLE</p>
         <h1 id="hero-title">Ideas for a<br><em>sustainable future.</em></h1>
         <p class="hero-intro">Explore TERI research on energy, climate and sustainable development. Search the collection or ask a question grounded in the reports.</p>
         <a class="hero-link" href="#library">Explore the library <span aria-hidden="true">↓</span></a>
       </div>
-      <div class="hero-art" aria-hidden="true">
+      <div class="hero-art" aria-hidden="true" data-reveal="right">
         <div class="sun"></div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
         <div class="horizon"></div><div class="hill hill-back"></div><div class="hill hill-front"></div>
         <div class="wind wind-one"><i></i><b></b><span></span></div>
@@ -47,17 +52,17 @@
     </section>
 
     <section class="stats-strip" aria-label="Library overview">
-      <div><strong id="stat-reports">—</strong><span>reports in the collection</span></div>
-      <div><strong>2018—2026</strong><span>publication years in this collection</span></div>
-      <div><strong>OPEN</strong><span>report-grounded answers</span></div>
+      <div data-reveal="up"><strong id="stat-reports">—</strong><span>reports in the collection</span></div>
+      <div data-reveal="up"><strong>2018—2026</strong><span>publication years in this collection</span></div>
+      <div data-reveal="up"><strong>OPEN</strong><span>report-grounded answers</span></div>
     </section>
 
     <section class="library-section section-wrap" id="library" aria-labelledby="library-title">
-      <div class="section-heading">
+      <div class="section-heading" data-reveal="up">
         <div><p class="eyebrow">THE COLLECTION</p><h2 id="library-title">Research, made findable.</h2></div>
         <p class="section-note">Reports and working papers from TERI’s research on India’s transition to a more sustainable future.</p>
       </div>
-      <div class="search-row">
+      <div class="search-row" data-reveal="up">
         <label class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><span class="visually-hidden">Search reports</span><input id="report-search" type="search" placeholder="Search topics, titles, authors…" autocomplete="off"><kbd>/</kbd></label>
         <div id="result-count" class="result-count" aria-live="polite"></div>
       </div>
@@ -67,13 +72,13 @@
 
     <section class="ask-section" id="ask" aria-labelledby="ask-title">
       <div class="ask-inner section-wrap">
-        <div class="ask-intro">
+        <div class="ask-intro" data-reveal="left">
           <p class="eyebrow eyebrow-light"><span class="eyebrow-dot"></span> ASK TERI REPORTS</p>
           <h2 id="ask-title">A better question<br><em>starts with evidence.</em></h2>
           <p>Ask about a report or a topic. Answers are assembled from searchable report text and linked to the page they come from.</p>
           <div class="local-note"><span aria-hidden="true">◎</span><span><strong>Grounded in the library</strong><br>No external AI service is used.</span></div>
         </div>
-        <div class="ask-card">
+        <div class="ask-card" data-reveal="right">
           <div class="ask-card-top"><span>REPORT RESEARCH ASSISTANT</span><span class="status-pill"><i></i> GROUNDED IN REPORTS</span></div>
           <form id="ask-form">
             <label for="question">What would you like to know?</label>
@@ -90,12 +95,12 @@
     </section>
 
     <section class="about-section section-wrap" id="about" aria-labelledby="about-title">
-      <div class="about-index"><span>01</span><span>ABOUT THIS LIBRARY</span></div>
-      <div class="about-content"><h2 id="about-title">Research that<br>moves us forward.</h2><div class="about-body"><p>This library brings TERI reports together in one searchable place. Each document stays intact, with its own report page, metadata and original file link.</p><p>The question assistant uses local text extraction and keyword retrieval. It shows report passages with page citations instead of generating claims from general model knowledge. Scanned pages, charts and complex tables may not be fully searchable.</p><a class="text-link" href="#library">Return to the collection <span>↑</span></a></div></div>
+      <div class="about-index" data-reveal="up"><span>01</span><span>ABOUT THIS LIBRARY</span></div>
+      <div class="about-content" data-reveal="up"><h2 id="about-title">Research that<br>moves us forward.</h2><div class="about-body"><p>This library brings TERI reports together in one searchable place. Each document stays intact, with its own report page, metadata and original file link.</p><p>The question assistant uses local text extraction and keyword retrieval. It shows report passages with page citations instead of generating claims from general model knowledge. Scanned pages, charts and complex tables may not be fully searchable.</p><a class="text-link" href="#library">Return to the collection <span>↑</span></a></div></div>
     </section>
   </main>
 
-  <footer class="site-footer"><a class="footer-brand" href="#main">TERI <span>REPORTS LIBRARY</span></a><span>KNOWLEDGE FOR A SUSTAINABLE FUTURE</span><span>PUBLIC LIBRARY · REPORT-GROUNDED</span></footer>
+  <footer class="site-footer"><a class="footer-brand" href="#main"><img src="./teri-logo.png" alt="The Energy and Resources Institute"><span>REPORTS LIBRARY</span></a><span>KNOWLEDGE FOR A SUSTAINABLE FUTURE</span><span>PUBLIC LIBRARY · REPORT-GROUNDED</span></footer>
 
   <dialog id="report-dialog" class="report-dialog" aria-labelledby="detail-title"><button class="dialog-close" aria-label="Close report details">×</button><div id="report-detail"></div></dialog>
 
