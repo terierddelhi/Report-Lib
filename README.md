@@ -1,11 +1,13 @@
 # TERI Reports Library
 
-A public, static site deployed with GitHub Pages. Supabase stores report PDFs and searchable report text. The browser app uses Supabase Postgres full-text search and Storage; it does not call an external AI service. Admins sign in with Supabase Auth before uploading. PDF text extraction for new uploads happens in the admin's browser.
+A public site deployed with GitHub Pages. Supabase stores report PDFs and searchable report text and runs an Edge Function for report-grounded explanations. The function retrieves relevant page passages, sends only those passages and the question to the OpenAI Responses API, and returns an explanation with source-page citations. Admins sign in with Supabase Auth before uploading. PDF text extraction for new uploads happens in the admin's browser.
 
 ## Project layout
 
 - `static/` — GitHub Pages site.
 - `supabase/schema.sql` — database tables, search function, Row Level Security policies, and the public PDF bucket.
+- `supabase/migrations/20261028_report_grounded_ai.sql` — scoped passage search and private hourly AI request limits.
+- `supabase/functions/report-answer/` — server-side retrieval and grounded explanation endpoint.
 - `scripts/sync_supabase.py` — one-time import of the existing local PDF collection and SQLite index.
 - `scripts/reindex_reports.py` — rebuilds searchable passages from the original local PDFs.
 - `data/reports/` — local source copies for migration; `.gitignore` keeps PDFs out of GitHub.
@@ -39,7 +41,7 @@ python scripts/sync_supabase.py
 
 The script prompts for the Supabase service-role key without echoing it. Enter the key directly at that prompt; do not put it in a command, paste it into chat, commit it, add it to `static/config.js`, or save it as a GitHub variable. The script uploads the PDF files and copies report metadata, sections and page passages from SQLite. Verified cover-page titles and authors in `scripts/metadata_overrides.json` take precedence over embedded PDF metadata. Run `python scripts/apply_metadata_overrides.py` to apply those corrections to the local index; the sync script also applies them when publishing metadata to Supabase. It is safe to rerun: it replaces the stored object and refreshes passages for each report.
 
-To rebuild the searchable index from PDFs already in `data/reports/` without uploading the PDFs again, run `python scripts/reindex_reports.py` and then `python scripts/sync_supabase.py --index-only`. This re-index pass uses plain PDF text extraction, removes common cover/contents noise, and clears automatically generated summaries. The public interface intentionally displays matching source passages with page links instead of presenting extracted text as a synthesized report summary. Report-level questions search only that report.
+To rebuild the searchable index from PDFs already in `data/reports/` without uploading the PDFs again, run `python scripts/reindex_reports.py` and then `python scripts/sync_supabase.py --index-only`. This re-index pass uses plain PDF text extraction, removes common cover/contents noise, and clears automatically generated summaries. The public interface does not show unverified report summaries.
 
 ## 3. Deploy the site with GitHub Pages
 
@@ -50,13 +52,28 @@ To rebuild the searchable index from PDFs already in `data/reports/` without upl
 
 The workflow copies `static/config.js` into the published site. The Supabase anon key is public by design; database and Storage policies enforce read-only public access and admin-only changes.
 
+## Report-grounded explanations
+
+1. In Supabase **SQL Editor**, run `supabase/migrations/20261028_report_grounded_ai.sql` once. This adds a report-filtered search function and a private per-IP quota table/function. The Edge Function hashes the client IP before storing it and allows up to 12 explanation requests per IP per hour.
+2. Create an OpenAI API key for a project with API billing enabled. In the Supabase project dashboard, open **Edge Functions → Secrets** and add `OPENAI_API_KEY`. Do not put this key in GitHub, `static/config.js`, or chat. Optionally set `OPENAI_MODEL`; the default is `gpt-6-luna`.
+3. From this repository, install the Supabase CLI and link it to project `rgrzlzvhbxywbuvifrfi`, then deploy the function:
+
+   ```powershell
+   supabase link --project-ref rgrzlzvhbxywbuvifrfi
+   supabase functions deploy report-answer
+   ```
+
+   The function configuration disables the gateway's legacy JWT check for this public endpoint; the handler restricts browser origins, checks the project's publishable key, and enforces its own hourly quota. Keep the database migration and function deployed before publishing the frontend change.
+
+Each answer retrieves at most 10 matching passages, uses only those as model context, and cites the source labels with links to the cited PDF pages. It returns a no-evidence message instead of calling the model when search finds nothing. Report-level questions are filtered to that report in the database. This is retrieval at question time, not model training or persistent learning. Relevant report excerpts and the question are sent to OpenAI for each answer. Scanned/image-only pages remain outside the text index. OpenAI API usage is billed separately; the per-IP limit is a basic abuse guard, so set a project-level spending limit in the OpenAI dashboard as well.
+
 ## Admin uploads
 
-Use **Admin** on the deployed site and sign in with an account listed in `public.library_admins`. New PDFs are limited to 50 MiB by the bucket. The browser extracts text page by page, uploads the unchanged PDF to Storage, and saves searchable passages to Postgres. No report content is sent to an AI service. Scanned pages without selectable text, charts and complex tables may not be fully searchable; OCR is not included.
+Use **Admin** on the deployed site and sign in with an account listed in `public.library_admins`. New PDFs are limited to 50 MiB by the bucket. The browser extracts text page by page, uploads the unchanged PDF to Storage, and saves searchable passages to Postgres. PDF uploads are not automatically sent to the model; only passages retrieved for a visitor's explanation request are sent. Scanned pages without selectable text, charts and complex tables may not be fully searchable; OCR is not included.
 
 ## Search and answers
 
-Search uses PostgreSQL full-text search over page passages. Question forms return matching passages from the selected report (or the full collection in the library-wide question panel), with page links. Answers are source excerpts; the app does not synthesize claims using a language model. Report PDFs remain intact.
+Search uses PostgreSQL full-text search over page passages. Question forms return a concise model-written explanation constrained to the retrieved report text, followed by the exact supporting passages and page links. Model citations link to those pages. The explanation may still omit nuance or misinterpret extraction, so readers should open cited PDF pages for important claims. Report PDFs remain intact.
 
 ## Local indexer API
 

@@ -88,7 +88,7 @@ async function openReport(id, updateHash = true) {
     const authorLine = [report.authors, report.published, `${report.pages} pages`].filter(Boolean).map(escapeHtml).join(" · ");
     const pdfUrl = publicPdfUrl(report);
     const sectionHtml = sections?.length ? `<h3>Report sections</h3><ul class="section-list">${sections.map(s => `<li><a href="${escapeHtml(`${publicPdfUrl(report)}#page=${s.first_page}`)}" target="_blank" rel="noopener">${escapeHtml(s.name)} <span>p. ${s.first_page} ↗</span></a></li>`).join("")}</ul>` : "";
-    detail.innerHTML = `<div class="detail-content"><div class="detail-kicker">TERI REPORT · ${escapeHtml(report.published || "DATE NOT LISTED")}</div><h2 id="detail-title">${escapeHtml(report.title)}</h2><p class="detail-meta">${authorLine || "Metadata available in the report PDF"}</p><h3>Read the report</h3><iframe class="report-preview" src="${escapeHtml(pdfUrl)}#view=FitH" title="PDF preview: ${escapeHtml(report.title)}" loading="lazy"></iframe><form class="scoped-ask-form" data-report-id="${escapeHtml(report.id)}"><label for="report-question">Ask about this report</label><textarea id="report-question" name="question" rows="2" maxlength="1200" placeholder="Ask a question about this report’s findings…" required></textarea><div class="ask-form-bottom"><span>Answers use passages from this report only.</span><button class="button button-ink" type="submit">Find an answer</button></div></form><div class="scoped-answer" aria-live="polite"></div><a class="original-link" href="${escapeHtml(pdfUrl)}" target="_blank" rel="noopener">Open PDF in a new tab <span aria-hidden="true">↗</span></a>${sectionHtml}</div>`;
+    detail.innerHTML = `<div class="detail-content"><div class="detail-kicker">TERI REPORT · ${escapeHtml(report.published || "DATE NOT LISTED")}</div><h2 id="detail-title">${escapeHtml(report.title)}</h2><p class="detail-meta">${authorLine || "Metadata available in the report PDF"}</p><h3>Read the report</h3><iframe class="report-preview" src="${escapeHtml(pdfUrl)}#view=FitH" title="PDF preview: ${escapeHtml(report.title)}" loading="lazy"></iframe><form class="scoped-ask-form" data-report-id="${escapeHtml(report.id)}"><label for="report-question">Ask about this report</label><textarea id="report-question" name="question" rows="2" maxlength="1200" placeholder="Ask a question about this report’s findings…" required></textarea><div class="ask-form-bottom"><span>AI explanations cite passages from this report.</span><button class="button button-ink" type="submit">Explain from report</button></div></form><div class="scoped-answer" aria-live="polite"></div><a class="original-link" href="${escapeHtml(pdfUrl)}" target="_blank" rel="noopener">Open PDF in a new tab <span aria-hidden="true">↗</span></a>${sectionHtml}</div>`;
     const dialog = $("#report-dialog");
     if (!dialog.open) dialog.showModal();
     if (updateHash) history.replaceState(null, "", `#report=${encodeURIComponent(id)}`);
@@ -101,39 +101,73 @@ $("#report-detail").addEventListener("submit", async event => {
   event.preventDefault();
   const answer = form.nextElementSibling;
   const question = form.elements.question.value.trim();
-  answer.innerHTML = '<p class="ask-loading">Searching this report <span class="spinner" aria-hidden="true"></span></p>';
+  answer.innerHTML = '<p class="ask-loading">Reading relevant pages and preparing an explanation <span class="spinner" aria-hidden="true"></span></p>';
   try {
-    const { data, error } = await state.supabase.from("report_chunks")
-      .select("report_id,page,section,content")
-      .textSearch("search_vector", buildSearchQuery(question), { config: "simple", type: "websearch" })
-      .eq("report_id", form.dataset.reportId)
-      .order("page").limit(12);
+    const { data, error } = await state.supabase.functions.invoke("report-answer", {
+      body: { question, report_id: form.dataset.reportId }
+    });
     if (error) throw error;
-    if (!data?.length) {
-      answer.innerHTML = '<p class="scoped-empty">No matching passage was found in this report. Try different wording.</p>';
+    if (!data?.evidence?.length) {
+      answer.innerHTML = `<p class="scoped-empty">${escapeHtml(data?.answer || "I couldn’t find enough supporting text in this report to answer that. Try different wording or check the PDF directly.")}</p>`;
       return;
     }
-    const passages = data.map(item => `<article class="evidence-item"><div class="evidence-top"><span class="evidence-title">${escapeHtml(state.reports.find(report => report.id === item.report_id)?.title || "This TERI report")}</span><a class="evidence-page" href="${escapeHtml(`${publicPdfUrl(state.reports.find(report => report.id === item.report_id))}#page=${item.page}`)}" target="_blank" rel="noopener">p. ${item.page} ↗</a></div>${item.section && item.section !== "Report text" ? `<div class="evidence-section">${escapeHtml(item.section)}</div>` : ""}<p>${escapeHtml(item.content)}</p></article>`).join("");
-    answer.innerHTML = `<div class="scoped-answer-heading">Relevant passages from this report</div><div class="evidence-list">${passages}</div>`;
+    renderGroundedAnswer(answer, data, form.dataset.reportId);
   } catch (error) {
-    answer.innerHTML = '<p class="ask-error">We couldn’t search this report right now. Please try again.</p>';
+    answer.innerHTML = `<p class="ask-error">${escapeHtml(await answerErrorMessage(error, "We couldn’t prepare an explanation right now. Please try again."))}</p>`;
   }
 });
 
-function renderAnswer(data) {
-  const area = $("#answer-area");
+function citedTextHtml(answer, evidence) {
+  const citation = /\[S(\d+)\]/g;
+  let html = "", last = 0, match;
+  while ((match = citation.exec(answer || ""))) {
+    html += escapeHtml(answer.slice(last, match.index));
+    const item = evidence[Number(match[1]) - 1];
+    if (item) {
+      const report = state.reports.find(candidate => candidate.id === item.report_id);
+      const pdf = report ? publicPdfUrl(report) : "";
+      const url = pdf ? `${pdf}#page=${item.page}` : "#";
+      html += `<a class="answer-citation" href="${escapeHtml(url)}" target="_blank" rel="noopener" aria-label="Open cited report page ${item.page}">[${Number(match[1])}]</a>`;
+    } else html += "";
+    last = citation.lastIndex;
+  }
+  return html + escapeHtml((answer || "").slice(last));
+}
+
+function renderGroundedAnswer(target, data, scopedReportId = null) {
   const evidence = data.evidence || [];
-  const items = evidence.map(item => {
+  if (!evidence.length) {
+    target.innerHTML = `<p class="scoped-empty">${escapeHtml(data.answer || "No supporting report passage was found. Try different wording.")}</p>`;
+    return;
+  }
+  const passages = evidence.map((item, index) => {
     const report = state.reports.find(candidate => candidate.id === item.report_id);
     const file = report ? `${publicPdfUrl(report)}#page=${item.page}` : "#";
-    return `<article class="evidence-item"><div class="evidence-top"><a class="evidence-title" href="#report=${encodeURIComponent(item.report_id)}" data-open-report="${escapeHtml(item.report_id)}">${escapeHtml(item.title)}</a><a class="evidence-page" href="${escapeHtml(file)}" target="_blank" rel="noopener">p. ${item.page} ↗</a></div>${item.section && item.section !== "Report text" ? `<div class="evidence-section">${escapeHtml(item.section)}</div>` : ""}<p>${escapeHtml(item.content)}</p></article>`;
+    return `<article class="evidence-item"><div class="evidence-top"><span class="evidence-title">${escapeHtml(report?.title || item.title || "TERI report")}</span><a class="evidence-page" href="${escapeHtml(file)}" target="_blank" rel="noopener">[S${index + 1}] p. ${item.page} ↗</a></div>${item.section && item.section !== "Report text" ? `<div class="evidence-section">${escapeHtml(item.section)}</div>` : ""}<p>${escapeHtml(item.content)}</p></article>`;
   }).join("");
-  area.innerHTML = `<section class="answer-block"><div class="answer-header"><h3>Relevant passages from TERI reports</h3></div>${evidence.length ? `<div class="evidence-list">${items}</div>` : '<p class="answer-copy">No matching passages were found. Try a more specific question.</p>'}</section>`;
+  const scope = scopedReportId ? "This explanation uses the selected report." : "This explanation uses passages retrieved across the library.";
+  target.innerHTML = `<section class="answer-block"><div class="answer-header"><h3>Explanation from TERI report passages</h3></div><p class="answer-copy grounded-explanation">${citedTextHtml(data.answer, evidence)}</p><p class="answer-scope">${scope} Check the cited pages in the PDF for context.</p><div class="evidence-list">${passages}</div></section>`;
+}
+
+function renderAnswer(data) {
+  const area = $("#answer-area");
+  renderGroundedAnswer(area, data);
 }
 
 function toast(text) {
   const el = $("#toast"); el.textContent = text; el.classList.add("show");
   clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove("show"), 3600);
+}
+
+async function answerErrorMessage(error, fallback) {
+  try {
+    const response = error?.context;
+    if (response instanceof Response) {
+      const payload = await response.clone().json();
+      if (typeof payload.error === "string") return payload.error;
+    }
+  } catch {}
+  return fallback;
 }
 
 $("#report-search").addEventListener("input", event => {
@@ -156,16 +190,13 @@ $("#ask-form").addEventListener("submit", async event => {
   event.preventDefault();
   const question = $("#question").value.trim();
   const area = $("#answer-area");
-  area.innerHTML = '<p class="ask-loading">Looking through the reports <span class="spinner" aria-hidden="true"></span></p>';
+  area.innerHTML = '<p class="ask-loading">Finding supporting report pages and preparing an explanation <span class="spinner" aria-hidden="true"></span></p>';
   try {
     if (!configured) throw new Error("Question search is temporarily unavailable.");
-    const searchQuery = buildSearchQuery(question);
-    if (!searchQuery) throw new Error("Please ask about a specific topic.");
-    const { data, error } = await state.supabase.rpc("search_report_chunks", { query_text: searchQuery, result_limit: 12 });
+    const { data, error } = await state.supabase.functions.invoke("report-answer", { body: { question } });
     if (error) throw error;
-    const evidence = (data || []).map(row => ({ ...row, title: state.reports.find(r => r.id === row.report_id)?.title || "TERI report" }));
-    renderAnswer({ evidence });
-  } catch (error) { area.innerHTML = '<p class="ask-error">We couldn\'t find an answer right now. Please try again later.</p>'; }
+    renderAnswer(data || {});
+  } catch (error) { area.innerHTML = `<p class="ask-error">${escapeHtml(await answerErrorMessage(error, "We couldn’t prepare an explanation right now. Please try again later."))}</p>`; }
 });
 
 document.querySelectorAll("[data-question]").forEach(button => button.addEventListener("click", () => {
