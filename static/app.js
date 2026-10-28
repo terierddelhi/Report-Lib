@@ -79,13 +79,39 @@ async function openReport(id, updateHash = true) {
     if (error) throw error;
     const detail = $("#report-detail");
     const authorLine = [report.authors, report.published, `${report.pages} pages`].filter(Boolean).map(escapeHtml).join(" · ");
+    const pdfUrl = publicPdfUrl(report);
     const sectionHtml = sections?.length ? `<h3>Report sections</h3><ul class="section-list">${sections.map(s => `<li><a href="${escapeHtml(`${publicPdfUrl(report)}#page=${s.first_page}`)}" target="_blank" rel="noopener">${escapeHtml(s.name)} <span>p. ${s.first_page} ↗</span></a></li>`).join("")}</ul>` : "";
-    detail.innerHTML = `<div class="detail-content"><div class="detail-kicker">TERI REPORT · ${escapeHtml(report.published || "DATE NOT LISTED")}</div><h2 id="detail-title">${escapeHtml(report.title)}</h2><p class="detail-meta">${authorLine || "Metadata available in the report PDF"}</p><h3>About this report</h3><p class="detail-summary">${escapeHtml(report.summary)}</p><a class="original-link" href="${escapeHtml(publicPdfUrl(report))}" target="_blank" rel="noopener">Open report PDF <span aria-hidden="true">↗</span></a>${sectionHtml}</div>`;
+    detail.innerHTML = `<div class="detail-content"><div class="detail-kicker">TERI REPORT · ${escapeHtml(report.published || "DATE NOT LISTED")}</div><h2 id="detail-title">${escapeHtml(report.title)}</h2><p class="detail-meta">${authorLine || "Metadata available in the report PDF"}</p><h3>About this report</h3><p class="detail-summary">${escapeHtml(report.summary)}</p><h3>Read the report</h3><iframe class="report-preview" src="${escapeHtml(pdfUrl)}#view=FitH" title="PDF preview: ${escapeHtml(report.title)}" loading="lazy"></iframe><form class="scoped-ask-form" data-report-id="${escapeHtml(report.id)}"><label for="report-question">Ask about this report</label><textarea id="report-question" name="question" rows="2" maxlength="1200" placeholder="Ask a question about this report’s findings…" required></textarea><div class="ask-form-bottom"><span>Answers use passages from this report only.</span><button class="button button-ink" type="submit">Find an answer</button></div></form><div class="scoped-answer" aria-live="polite"></div><a class="original-link" href="${escapeHtml(pdfUrl)}" target="_blank" rel="noopener">Open PDF in a new tab <span aria-hidden="true">↗</span></a>${sectionHtml}</div>`;
     const dialog = $("#report-dialog");
     if (!dialog.open) dialog.showModal();
     if (updateHash) history.replaceState(null, "", `#report=${encodeURIComponent(id)}`);
   } catch (error) { toast("We couldn't open this report. Please try again."); }
 }
+
+$("#report-detail").addEventListener("submit", async event => {
+  const form = event.target.closest(".scoped-ask-form");
+  if (!form) return;
+  event.preventDefault();
+  const answer = form.nextElementSibling;
+  const question = form.elements.question.value.trim();
+  answer.innerHTML = '<p class="ask-loading">Searching this report <span class="spinner" aria-hidden="true"></span></p>';
+  try {
+    const { data, error } = await state.supabase.from("report_chunks")
+      .select("report_id,page,section,content")
+      .textSearch("search_vector", question, { config: "simple", type: "websearch" })
+      .eq("report_id", form.dataset.reportId)
+      .order("page").limit(12);
+    if (error) throw error;
+    if (!data?.length) {
+      answer.innerHTML = '<p class="scoped-empty">No matching passage was found in this report. Try different wording.</p>';
+      return;
+    }
+    const passages = data.map(item => `<article class="evidence-item"><div class="evidence-top"><span class="evidence-title">${escapeHtml(state.reports.find(report => report.id === item.report_id)?.title || "This TERI report")}</span><a class="evidence-page" href="${escapeHtml(`${publicPdfUrl(state.reports.find(report => report.id === item.report_id))}#page=${item.page}`)}" target="_blank" rel="noopener">p. ${item.page} ↗</a></div>${item.section && item.section !== "Report text" ? `<div class="evidence-section">${escapeHtml(item.section)}</div>` : ""}<p>${escapeHtml(item.content)}</p></article>`).join("");
+    answer.innerHTML = `<div class="scoped-answer-heading">Relevant passages from this report</div><div class="evidence-list">${passages}</div>`;
+  } catch (error) {
+    answer.innerHTML = '<p class="ask-error">We couldn’t search this report right now. Please try again.</p>';
+  }
+});
 
 function renderAnswer(data) {
   const area = $("#answer-area");
