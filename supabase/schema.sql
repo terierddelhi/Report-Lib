@@ -157,7 +157,7 @@ declare
 begin
   insert into public.report_ai_request_limits as current_limit (ip_hash, window_started_at, request_count)
   values ($1, now(), 1)
-  on conflict (ip_hash) do update
+  on conflict on constraint report_ai_request_limits_pkey do update
     set window_started_at = case
           when current_limit.window_started_at < now() - interval '1 hour' then now()
           else current_limit.window_started_at

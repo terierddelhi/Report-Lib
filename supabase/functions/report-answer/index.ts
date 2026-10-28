@@ -124,13 +124,18 @@ Deno.serve(async (request: Request) => {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: instructions }] },
         contents: [{ role: "user", parts: [{ text: input }] }],
-        generationConfig: { maxOutputTokens: 900, temperature: 0.2 },
+        generationConfig: {
+          maxOutputTokens: 900,
+          temperature: 0.2,
+          thinkingConfig: { thinkingLevel: "low" },
+        },
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(45000),
     });
   } catch (error) {
-    console.error("Model request failed", error instanceof Error ? error.message : "unknown error");
-    return json({ error: "The explanation service could not be reached. Please try again." }, 502, requestOrigin);
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    console.error(timedOut ? "Model request timed out" : "Model request failed", error instanceof Error ? error.message : "unknown error");
+    return json({ error: timedOut ? "The explanation is taking longer than expected. Please try again." : "The explanation service could not be reached. Please try again." }, 502, requestOrigin);
   }
   if (!modelResponse.ok) {
     console.error("Model returned an error", modelResponse.status);
