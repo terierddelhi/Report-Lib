@@ -7,6 +7,7 @@ never put it in static/config.js or commit it to GitHub.
 from __future__ import annotations
 
 import json
+import argparse
 import os
 import sqlite3
 import sys
@@ -61,6 +62,9 @@ def batched(rows):
 
 def main():
     global KEY
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--index-only", action="store_true", help="Update metadata and searchable passages without reuploading stored PDFs.")
+    args = parser.parse_args()
     if not BASE_URL:
         sys.exit("Set SUPABASE_URL first.")
     if not KEY:
@@ -82,9 +86,10 @@ def main():
         # Unicode punctuation that Supabase Storage rejects even when URL-encoded.
         object_path = f"{report['id']}/report.pdf"
         quoted_path = "/".join(urllib.parse.quote(part, safe="") for part in object_path.split("/"))
-        with source.open("rb") as pdf:
-            request(f"/storage/v1/object/reports/{quoted_path}", method="POST", body=pdf.read(),
-                    content_type="application/pdf", extra_headers={"x-upsert": "true"})
+        if not args.index_only:
+            with source.open("rb") as pdf:
+                request(f"/storage/v1/object/reports/{quoted_path}", method="POST", body=pdf.read(),
+                        content_type="application/pdf", extra_headers={"x-upsert": "true"})
         row = dict(report)
         row.update(METADATA_OVERRIDES.get(report["id"], {}))
         row["warnings"] = json.loads(row.get("warnings") or "[]")
@@ -104,7 +109,7 @@ def main():
             rest("report_chunks", batch)
         print(f"[{number}/{len(reports)}] {report['title']} — {len(chunks)} passages")
     con.close()
-    print("Done. Reports, PDFs and searchable page passages are in Supabase.")
+    print("Done. Reports and searchable page passages are in Supabase." if args.index_only else "Done. Reports, PDFs and searchable page passages are in Supabase.")
 
 
 if __name__ == "__main__":

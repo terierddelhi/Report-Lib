@@ -7,6 +7,7 @@ A public, static site deployed with GitHub Pages. Supabase stores report PDFs an
 - `static/` — GitHub Pages site.
 - `supabase/schema.sql` — database tables, search function, Row Level Security policies, and the public PDF bucket.
 - `scripts/sync_supabase.py` — one-time import of the existing local PDF collection and SQLite index.
+- `scripts/reindex_reports.py` — rebuilds searchable passages from the original local PDFs.
 - `data/reports/` — local source copies for migration; `.gitignore` keeps PDFs out of GitHub.
 - `server.py` — original local indexer and development server, used to generate the SQLite index for the one-time import.
 - `.github/workflows/pages.yml` — deploys the static site after pushes to `main`.
@@ -38,6 +39,8 @@ python scripts/sync_supabase.py
 
 The script prompts for the Supabase service-role key without echoing it. Enter the key directly at that prompt; do not put it in a command, paste it into chat, commit it, add it to `static/config.js`, or save it as a GitHub variable. The script uploads the PDF files and copies report metadata, sections and page passages from SQLite. Verified cover-page titles and authors in `scripts/metadata_overrides.json` take precedence over embedded PDF metadata. Run `python scripts/apply_metadata_overrides.py` to apply those corrections to the local index; the sync script also applies them when publishing metadata to Supabase. It is safe to rerun: it replaces the stored object and refreshes passages for each report.
 
+To rebuild the searchable index from PDFs already in `data/reports/` without uploading the PDFs again, run `python scripts/reindex_reports.py` and then `python scripts/sync_supabase.py --index-only`. This re-index pass uses plain PDF text extraction, removes common cover/contents noise, and clears automatically generated summaries. The public interface intentionally displays matching source passages with page links instead of presenting extracted text as a synthesized report summary. Report-level questions search only that report.
+
 ## 3. Deploy the site with GitHub Pages
 
 1. Create a GitHub repository and push this project to its `main` branch. The report PDFs and local SQLite database are ignored by `.gitignore`; do not force-add them.
@@ -53,7 +56,7 @@ Use **Admin** on the deployed site and sign in with an account listed in `public
 
 ## Search and answers
 
-Search uses PostgreSQL full-text search over page passages and report metadata. The question panel returns matching report passages with page links; it does not generate claims using a language model. Report PDFs remain intact. Reports already in the collection retain their extracted metadata and section headings during the initial SQLite-to-Supabase migration.
+Search uses PostgreSQL full-text search over page passages. Question forms return matching passages from the selected report (or the full collection in the library-wide question panel), with page links. Answers are source excerpts; the app does not synthesize claims using a language model. Report PDFs remain intact.
 
 ## Local indexer API
 

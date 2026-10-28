@@ -121,9 +121,27 @@ def likely_heading(line: str) -> bool:
     if re.match(r"^(chapter\s+\d+|\d+(?:\.\d+)*\s+[A-Z]|appendix\s+[A-Z0-9]|annexure\s*[-I0-9]+)", s, re.I):
         return True
     letters = [c for c in s if c.isalpha()]
-    if len(letters) >= 5 and sum(c.isupper() for c in letters) / len(letters) > .78:
+    if s.lower() in {"abstract", "executive summary", "conclusion", "conclusions", "recommendations", "way forward", "preface", "introduction", "acknowledgements", "methodology", "key findings", "overview", "background"}:
         return True
-    return s.lower() in {"executive summary", "conclusion", "conclusions", "recommendations", "way forward", "preface", "introduction", "acknowledgements", "methodology", "key findings"}
+    # Avoid treating repeated TERI mastheads and short running headers as sections.
+    return len(s.split()) >= 4 and len(letters) >= 18 and sum(c.isupper() for c in letters) / len(letters) > .78
+
+
+def useful_passage(text: str) -> bool:
+    compact = re.sub(r"\s+", " ", text).strip()
+    words = re.findall(r"[\w’'-]+", compact)
+    letters = sum(character.isalpha() for character in compact)
+    if len(words) < 18 or not compact or letters / len(compact) < .58:
+        return False
+    lowered = compact.lower()
+    if re.search(r"table of contents|certificate of originality|all rights reserved|suggested format for citation", lowered):
+        return False
+    if "copyright" in lowered or "isbn" in lowered or "the energy and resources institute" in lowered:
+        if len(words) < 65:
+            return False
+    if re.search(r"(?:\.{4,}|_{4,})\s*\d+", compact) and len(words) < 90:
+        return False
+    return True
 
 
 def pages_text(pdf_path: Path):
@@ -139,7 +157,9 @@ def pages_text(pdf_path: Path):
     section_starts = set()
     for number, page in enumerate(reader.pages, 1):
         try:
-            raw = page.extract_text(extraction_mode="layout") or page.extract_text() or ""
+            # Plain extraction preserves words more faithfully than layout mode,
+            # which often inserts spaces into justified or multi-column text.
+            raw = page.extract_text() or page.extract_text(extraction_mode="layout") or ""
         except Exception:
             raw = ""
         text = clean_text(raw)
@@ -151,16 +171,27 @@ def pages_text(pdf_path: Path):
                 active_section = line[:110]
                 section_starts.add((active_section, number))
                 break
-        paras = [clean_text(p) for p in re.split(r"\n\s*\n", text) if len(clean_text(p)) > 35]
+        normalized = re.sub(r"-\n(?=[a-z])", "", text)
+        normalized = re.sub(r"(?<![.!?:;])\n(?!\n)", " ", normalized)
+        paras = [clean_text(p) for p in re.split(r"\n\s*\n", normalized) if len(clean_text(p)) > 60]
         if not paras and text:
-            paras = [text]
+            paras = [normalized]
         chunks = []
         for para in paras:
-            # Preserve readable paragraph boundaries while keeping each search passage compact.
-            for start in range(0, len(para), 1250):
-                chunk = para[start:start + 1250].strip()
-                if len(chunk) > 25:
-                    chunks.append((number, active_section, chunk))
+            # Keep passage boundaries at sentences so page references remain useful.
+            sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", para)
+            buffer = ""
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if not sentence:
+                    continue
+                if buffer and len(buffer) + len(sentence) > 1050:
+                    if len(buffer) >= 120 and useful_passage(buffer):
+                        chunks.append((number, active_section, buffer))
+                    buffer = ""
+                buffer = f"{buffer} {sentence}".strip()
+            if len(buffer) >= 120 and useful_passage(buffer):
+                chunks.append((number, active_section, buffer))
         page_data.append((number, text, active_section, chunks))
     return reader, page_data, warnings, sorted(section_starts, key=lambda x: x[1])
 
@@ -224,33 +255,9 @@ def display_title(meta, filename: str, first_text: str) -> str:
 
 
 def extractive_summary(page_data):
-    candidates = []
-    for number, text, section, _ in page_data:
-        if not text:
-            continue
-        area = f"{section} {text[:1400]}".lower()
-        weight = (12 if "executive summary" in section.lower() else 0)
-        weight += (10 if any(x in section.lower() for x in ["key findings", "summary of findings"]) else 0)
-        weight += (8 if any(x in section.lower() for x in ["conclusion", "recommendation", "way forward"]) else 0)
-        weight += (2 if any(x in area for x in ["executive summary", "summary of findings", "key findings"]) else 0)
-        weight += (1 if number <= 5 else 0)
-        sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", re.sub(r"\s+", " ", text[:2200]))
-        for sent in sentences:
-            sent = sent.strip(" -•\n")
-            if 65 <= len(sent) <= 250:
-                candidates.append((weight, number, sent))
-    # Prefer distinct sentences from the report's summary/conclusion areas, then the opening.
-    candidates.sort(key=lambda item: (-item[0], item[1]))
-    chosen, normalized = [], set()
-    for _, page, sentence in candidates:
-        key = re.sub(r"\W", "", sentence.lower())[:100]
-        if key in normalized:
-            continue
-        normalized.add(key)
-        chosen.append(f"{sentence} (p. {page})")
-        if len(chosen) == 2:
-            break
-    return " ".join(chosen) if chosen else "Text could not be extracted from this report. Open the PDF to read it."
+    # Automatic PDF snippets are not reliable enough to present as report summaries.
+    # Surface only source-grounded passages in the public question experience.
+    return ""
 
 
 def ingest_pdf(path: Path) -> dict:
@@ -472,29 +479,8 @@ class Handler(BaseHTTPRequestHandler):
         quoted_tokens = ['"' + t.replace('"', '""') + '"' for t in query_tokens]
         match_expression = " AND ".join(quoted_tokens)
         qlower = question.lower()
-        wants_full = any(x in qlower for x in ["summarize", "summary of", "full report", "overall summary"])
         broad = any(word in qlower for word in ["all", "every", "each", "overall", "compare", "comparison", "versus", "recommend", "recommendation"])
         with db_connect() as con:
-            reports = con.execute("SELECT * FROM reports ORDER BY title COLLATE NOCASE").fetchall()
-            if wants_full:
-                candidates = [r for r in reports if any(t in r["title"].lower() for t in query_tokens if len(t) > 3)]
-                if candidates:
-                    target = max(candidates, key=lambda r: sum(t in r["title"].lower() for t in query_tokens if len(t) > 3))
-                    section_rows = con.execute("SELECT name,MIN(first_page) AS first_page FROM sections WHERE report_id=? GROUP BY name ORDER BY first_page", (target["id"],)).fetchall()
-                    chunk_rows = con.execute("SELECT page,section,content FROM chunks WHERE report_id=? ORDER BY CAST(page AS INT),rowid", (target["id"],)).fetchall()
-                    # Section coverage is built from the indexed text of the entire report.
-                    grouped = {}
-                    for row in chunk_rows:
-                        grouped.setdefault(row["section"], []).append(row)
-                    answer_sections = []
-                    for section, items in grouped.items():
-                        chosen = next((x for x in items if len(x["content"]) > 110), items[0])
-                        snippet = re.sub(r"\s+", " ", chosen["content"]).strip()
-                        if len(snippet) > 560:
-                            snippet = snippet[:557].rsplit(" ", 1)[0] + "…"
-                        answer_sections.append({"section": section, "page": chosen["page"], "text": snippet, "report_id": target["id"], "title": target["title"], "file_url": f"/api/reports/{target['id']}/file#page={chosen['page']}"})
-                    if answer_sections:
-                        return {"answer": f"Here is an extractive, section-by-section overview of **{target['title']}**. It uses text extracted across all {target['pages']} pages; each excerpt links to its PDF page. This local assistant does not paraphrase beyond the text it can extract.", "evidence": answer_sections, "mode": "full_summary", "warnings": json.loads(target["warnings"] or "[]")}
             try:
                 limit = 2000 if broad else 100
                 rows = con.execute("""

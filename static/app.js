@@ -4,6 +4,13 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":
 const config = window.TERI_SUPABASE || {};
 const configured = Boolean(config.url && config.anonKey && window.supabase?.createClient);
 if (configured) state.supabase = window.supabase.createClient(config.url, config.anonKey);
+const questionStopWords = new Set("a an and are as at be by can could did do does for from give how i in is it its me of on or our please report reports say says tell that the their them this to was what when where which who why with would you your summarize summary overview about based recommendations recommendation findings explain describe".split(" "));
+
+function buildSearchQuery(question) {
+  const terms = (question.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
+    .filter(term => term.length > 1 && !questionStopWords.has(term));
+  return [...new Set(terms)].slice(0, 12).join(" & ");
+}
 
 const revealObserver = "IntersectionObserver" in window ? new IntersectionObserver(entries => {
   for (const entry of entries) {
@@ -40,17 +47,17 @@ async function loadReports(query = "") {
     return;
   }
   try {
-    const { data, error } = await state.supabase.from("reports").select("id,filename,title,authors,published,summary,pages,warnings,source_url,object_path,indexed_at").order("published", { ascending: false }).order("title");
+    const { data, error } = await state.supabase.from("reports").select("id,filename,title,authors,published,pages,object_path").order("published", { ascending: false }).order("title");
     if (error) throw error;
     state.reports = data || [];
     let reports = state.reports;
     if (query) {
-      const [searchResult] = await Promise.all([state.supabase.rpc("search_report_chunks", { query_text: query, result_limit: 60 })]);
+      const [searchResult] = await Promise.all([state.supabase.rpc("search_report_chunks", { query_text: buildSearchQuery(query), result_limit: 60 })]);
       if (searchResult.error) throw searchResult.error;
       const ids = [...new Set((searchResult.data || []).map(row => row.report_id))];
       const normalized = query.toLocaleLowerCase();
       const byId = new Map(reports.map(report => [report.id, report]));
-      reports = [...ids.map(id => byId.get(id)).filter(Boolean), ...reports.filter(report => !ids.includes(report.id) && [report.title, report.authors, report.summary].some(value => (value || "").toLocaleLowerCase().includes(normalized)))];
+      reports = [...ids.map(id => byId.get(id)).filter(Boolean), ...reports.filter(report => !ids.includes(report.id) && [report.title, report.authors].some(value => (value || "").toLocaleLowerCase().includes(normalized)))];
     }
     $("#stat-reports").textContent = String(state.reports.length).padStart(2, "0");
     $("#result-count").textContent = query ? `${reports.length} result${reports.length === 1 ? "" : "s"}` : `${reports.length} reports`;
@@ -58,7 +65,7 @@ async function loadReports(query = "") {
       <article class="report-card" data-reveal="up" style="--reveal-delay:${(index % 3) * 70}ms">
         <div class="card-meta"><span class="card-type">TERI REPORT</span><span>${escapeHtml(report.published || "Publication date n/a")}</span></div>
         <h3>${escapeHtml(report.title)}</h3>
-        <p class="summary">${escapeHtml(report.summary)}</p>
+        <p class="summary">Open the report to read the source document and ask a question about its contents.</p>
         <div class="card-footer"><span class="page-info">${report.pages} pages${report.authors ? ` · ${escapeHtml(report.authors)}` : ""}</span><button class="card-open" data-open-report="${escapeHtml(report.id)}">View report <span aria-hidden="true">↗</span></button></div>
       </article>`).join("");
     observeReveals(grid);
@@ -81,7 +88,7 @@ async function openReport(id, updateHash = true) {
     const authorLine = [report.authors, report.published, `${report.pages} pages`].filter(Boolean).map(escapeHtml).join(" · ");
     const pdfUrl = publicPdfUrl(report);
     const sectionHtml = sections?.length ? `<h3>Report sections</h3><ul class="section-list">${sections.map(s => `<li><a href="${escapeHtml(`${publicPdfUrl(report)}#page=${s.first_page}`)}" target="_blank" rel="noopener">${escapeHtml(s.name)} <span>p. ${s.first_page} ↗</span></a></li>`).join("")}</ul>` : "";
-    detail.innerHTML = `<div class="detail-content"><div class="detail-kicker">TERI REPORT · ${escapeHtml(report.published || "DATE NOT LISTED")}</div><h2 id="detail-title">${escapeHtml(report.title)}</h2><p class="detail-meta">${authorLine || "Metadata available in the report PDF"}</p><h3>About this report</h3><p class="detail-summary">${escapeHtml(report.summary)}</p><h3>Read the report</h3><iframe class="report-preview" src="${escapeHtml(pdfUrl)}#view=FitH" title="PDF preview: ${escapeHtml(report.title)}" loading="lazy"></iframe><form class="scoped-ask-form" data-report-id="${escapeHtml(report.id)}"><label for="report-question">Ask about this report</label><textarea id="report-question" name="question" rows="2" maxlength="1200" placeholder="Ask a question about this report’s findings…" required></textarea><div class="ask-form-bottom"><span>Answers use passages from this report only.</span><button class="button button-ink" type="submit">Find an answer</button></div></form><div class="scoped-answer" aria-live="polite"></div><a class="original-link" href="${escapeHtml(pdfUrl)}" target="_blank" rel="noopener">Open PDF in a new tab <span aria-hidden="true">↗</span></a>${sectionHtml}</div>`;
+    detail.innerHTML = `<div class="detail-content"><div class="detail-kicker">TERI REPORT · ${escapeHtml(report.published || "DATE NOT LISTED")}</div><h2 id="detail-title">${escapeHtml(report.title)}</h2><p class="detail-meta">${authorLine || "Metadata available in the report PDF"}</p><h3>Read the report</h3><iframe class="report-preview" src="${escapeHtml(pdfUrl)}#view=FitH" title="PDF preview: ${escapeHtml(report.title)}" loading="lazy"></iframe><form class="scoped-ask-form" data-report-id="${escapeHtml(report.id)}"><label for="report-question">Ask about this report</label><textarea id="report-question" name="question" rows="2" maxlength="1200" placeholder="Ask a question about this report’s findings…" required></textarea><div class="ask-form-bottom"><span>Answers use passages from this report only.</span><button class="button button-ink" type="submit">Find an answer</button></div></form><div class="scoped-answer" aria-live="polite"></div><a class="original-link" href="${escapeHtml(pdfUrl)}" target="_blank" rel="noopener">Open PDF in a new tab <span aria-hidden="true">↗</span></a>${sectionHtml}</div>`;
     const dialog = $("#report-dialog");
     if (!dialog.open) dialog.showModal();
     if (updateHash) history.replaceState(null, "", `#report=${encodeURIComponent(id)}`);
@@ -98,7 +105,7 @@ $("#report-detail").addEventListener("submit", async event => {
   try {
     const { data, error } = await state.supabase.from("report_chunks")
       .select("report_id,page,section,content")
-      .textSearch("search_vector", question, { config: "simple", type: "websearch" })
+      .textSearch("search_vector", buildSearchQuery(question), { config: "simple", type: "websearch" })
       .eq("report_id", form.dataset.reportId)
       .order("page").limit(12);
     if (error) throw error;
@@ -121,7 +128,7 @@ function renderAnswer(data) {
     const file = report ? `${publicPdfUrl(report)}#page=${item.page}` : "#";
     return `<article class="evidence-item"><div class="evidence-top"><a class="evidence-title" href="#report=${encodeURIComponent(item.report_id)}" data-open-report="${escapeHtml(item.report_id)}">${escapeHtml(item.title)}</a><a class="evidence-page" href="${escapeHtml(file)}" target="_blank" rel="noopener">p. ${item.page} ↗</a></div>${item.section && item.section !== "Report text" ? `<div class="evidence-section">${escapeHtml(item.section)}</div>` : ""}<p>${escapeHtml(item.content)}</p></article>`;
   }).join("");
-  area.innerHTML = `<section class="answer-block"><div class="answer-header"><h3>From the reports</h3></div><p class="answer-copy">${escapeHtml(data.answer)}</p>${evidence.length ? `<div class="evidence-list">${items}</div>` : ""}</section>`;
+  area.innerHTML = `<section class="answer-block"><div class="answer-header"><h3>Relevant passages from TERI reports</h3></div>${evidence.length ? `<div class="evidence-list">${items}</div>` : '<p class="answer-copy">No matching passages were found. Try a more specific question.</p>'}</section>`;
 }
 
 function toast(text) {
@@ -152,21 +159,12 @@ $("#ask-form").addEventListener("submit", async event => {
   area.innerHTML = '<p class="ask-loading">Looking through the reports <span class="spinner" aria-hidden="true"></span></p>';
   try {
     if (!configured) throw new Error("Question search is temporarily unavailable.");
-    const titleMatch = state.reports.find(report => question.toLocaleLowerCase().includes(report.title.toLocaleLowerCase()) && /summari[sz]e|overview|about/i.test(question));
-    if (titleMatch) {
-      const [{ data: sections, error: sectionError }, { data: passages, error: chunkError }] = await Promise.all([
-        state.supabase.from("report_sections").select("name,first_page").eq("report_id", titleMatch.id).order("first_page"),
-        state.supabase.from("report_chunks").select("report_id,page,section,content").eq("report_id", titleMatch.id).order("page").limit(24)
-      ]);
-      if (sectionError) throw sectionError;
-      if (chunkError) throw chunkError;
-      renderAnswer({ mode: "full_summary", answer: `${titleMatch.summary}${sections?.length ? ` The report includes ${sections.map(s => s.name).join(", ")}.` : ""}`, evidence: passages || [], warnings: titleMatch.warnings || [] });
-    } else {
-      const { data, error } = await state.supabase.rpc("search_report_chunks", { query_text: question, result_limit: 12 });
-      if (error) throw error;
-      const evidence = (data || []).map(row => ({ ...row, title: state.reports.find(r => r.id === row.report_id)?.title || "TERI report" }));
-      renderAnswer({ answer: evidence.length ? "Here are relevant passages from the reports. Select a page link to read more." : "We couldn't find a relevant passage. Try a different question or search the collection.", evidence });
-    }
+    const searchQuery = buildSearchQuery(question);
+    if (!searchQuery) throw new Error("Please ask about a specific topic.");
+    const { data, error } = await state.supabase.rpc("search_report_chunks", { query_text: searchQuery, result_limit: 12 });
+    if (error) throw error;
+    const evidence = (data || []).map(row => ({ ...row, title: state.reports.find(r => r.id === row.report_id)?.title || "TERI report" }));
+    renderAnswer({ evidence });
   } catch (error) { area.innerHTML = '<p class="ask-error">We couldn\'t find an answer right now. Please try again later.</p>'; }
 });
 
@@ -244,7 +242,38 @@ function splitText(text, max = 1500, overlap = 180) {
 
 function looksLikeHeading(line) {
   const clean = line.trim();
-  return clean.length >= 4 && clean.length <= 100 && clean.split(/\s+/).length <= 13 && (/^(chapter\s+\d+|\d+(?:\.\d+)*\s+[A-Z]|appendix|annexure)/i.test(clean) || (clean === clean.toLocaleUpperCase() && /[A-Z]/.test(clean)));
+  const words = clean.split(/\s+/);
+  const standard = new Set(["abstract", "executive summary", "introduction", "conclusion", "conclusions", "recommendations", "methodology", "overview", "background", "key findings"]);
+  return clean.length >= 4 && clean.length <= 100 && words.length <= 13 && (/^(chapter\s+\d+|\d+(?:\.\d+)*\s+[A-Z]|appendix|annexure)/i.test(clean) || standard.has(clean.toLocaleLowerCase()) || (words.length >= 4 && clean === clean.toLocaleUpperCase() && /[A-Z]/.test(clean)));
+}
+
+function isUsefulPassage(text) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  const words = compact.match(/[\p{L}\p{N}’'-]+/gu) || [];
+  const letters = (compact.match(/\p{L}/gu) || []).length;
+  if (words.length < 18 || !compact || letters / compact.length < 0.58) return false;
+  if (/table of contents|certificate of originality|all rights reserved|suggested format for citation/i.test(compact)) return false;
+  if (/copyright|\bisbn\b|the energy and resources institute/i.test(compact) && words.length < 65) return false;
+  if (/(?:\.{4,}|_{4,})\s*\d+/.test(compact) && words.length < 90) return false;
+  return true;
+}
+
+function makePassages(text, max = 1050) {
+  const normalized = text.replace(/-\n(?=[a-z])/g, "").replace(/(?<![.!?:;])\n(?!\n)/g, " ");
+  const sentences = normalized.split(/(?<=[.!?])\s+(?=[A-Z0-9])/);
+  const chunks = [];
+  let buffer = "";
+  for (const sentence of sentences) {
+    const part = sentence.trim();
+    if (!part) continue;
+    if (buffer && buffer.length + part.length > max) {
+      if (buffer.length >= 120 && isUsefulPassage(buffer)) chunks.push(buffer);
+      buffer = "";
+    }
+    buffer = `${buffer} ${part}`.trim();
+  }
+  if (buffer.length >= 120 && isUsefulPassage(buffer)) chunks.push(buffer);
+  return chunks;
 }
 
 function textLines(items) {
@@ -280,7 +309,7 @@ async function extractPdf(file) {
         sections.set(`${section}\u0000${pageNumber}`, { report_id: "", name: section, first_page: pageNumber });
       }
     }
-    const pieces = splitText(text);
+    const pieces = makePassages(text);
     for (const piece of pieces) chunks.push({ report_id: "", page: pageNumber, section, content: piece });
     if (pageNumber <= 3 && text) fullText += ` ${text}`;
   }
@@ -289,8 +318,7 @@ async function extractPdf(file) {
   const authoredDate = (info.CreationDate || "").match(/D:(\d{4})/);
   const published = authoredDate?.[1] || "";
   const warnings = sparse.length ? [`Little or no selectable text was extracted from page(s) ${sparse.slice(0, 16).join(", ")}${sparse.length > 16 ? " …" : ""}. Scanned pages may need OCR; diagrams and complex tables may be incomplete.`] : [];
-  const summary = fullText.replace(/\s+/g, " ").trim().slice(0, 620) || "No selectable text was extracted from this PDF.";
-  return { title, authors: (info.Author || "").trim().slice(0, 200), published, summary, pages: pdf.numPages, warnings, sections: [...sections.values()], chunks };
+  return { title, authors: (info.Author || "").trim().slice(0, 200), published, pages: pdf.numPages, warnings, sections: [...sections.values()], chunks };
 }
 
 $("#upload-form").addEventListener("submit", async event => {
@@ -307,7 +335,7 @@ $("#upload-form").addEventListener("submit", async event => {
     if (uploadError) throw uploadError;
     const sections = extracted.sections.map(section => ({ ...section, report_id: reportId }));
     const chunks = extracted.chunks.map(chunk => ({ ...chunk, report_id: reportId }));
-    const report = { id: reportId, filename: safeFilename(file.name), title: extracted.title, authors: extracted.authors, published: extracted.published, summary: extracted.summary, pages: extracted.pages, warnings: extracted.warnings, source_url: "", object_path: objectPath };
+    const report = { id: reportId, filename: safeFilename(file.name), title: extracted.title, authors: extracted.authors, published: extracted.published, pages: extracted.pages, warnings: extracted.warnings, source_url: "", object_path: objectPath };
     let result = await state.supabase.from("reports").insert(report);
     if (result.error) throw result.error;
     recordCreated = true;
