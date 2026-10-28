@@ -78,12 +78,9 @@ async function openReport(id, updateHash = true) {
     const { data: sections, error } = await state.supabase.from("report_sections").select("name,first_page").eq("report_id", id).order("first_page");
     if (error) throw error;
     const detail = $("#report-detail");
-    const warnings = Array.isArray(report.warnings) ? report.warnings : [];
-    const warningHtml = warnings.length ? `<p class="detail-warning"><strong>Content note.</strong> ${warnings.map(escapeHtml).join(" ")}</p>` : "";
     const authorLine = [report.authors, report.published, `${report.pages} pages`].filter(Boolean).map(escapeHtml).join(" · ");
     const sectionHtml = sections?.length ? `<h3>Report sections</h3><ul class="section-list">${sections.map(s => `<li><a href="${escapeHtml(`${publicPdfUrl(report)}#page=${s.first_page}`)}" target="_blank" rel="noopener">${escapeHtml(s.name)} <span>p. ${s.first_page} ↗</span></a></li>`).join("")}</ul>` : "";
-    const source = report.source_url ? `<a class="text-link" href="${escapeHtml(report.source_url)}" target="_blank" rel="noopener">Original source page ↗</a>` : "";
-    detail.innerHTML = `<div class="detail-content"><div class="detail-kicker">TERI REPORT · ${escapeHtml(report.published || "DATE NOT LISTED")}</div><h2 id="detail-title">${escapeHtml(report.title)}</h2><p class="detail-meta">${authorLine || "Metadata available in the report PDF"}</p><h3>About this report</h3><p class="detail-summary">${escapeHtml(report.summary)}</p>${warningHtml}<a class="original-link" href="${escapeHtml(publicPdfUrl(report))}" target="_blank" rel="noopener">Open report PDF <span aria-hidden="true">↗</span></a>${source}${sectionHtml}</div>`;
+    detail.innerHTML = `<div class="detail-content"><div class="detail-kicker">TERI REPORT · ${escapeHtml(report.published || "DATE NOT LISTED")}</div><h2 id="detail-title">${escapeHtml(report.title)}</h2><p class="detail-meta">${authorLine || "Metadata available in the report PDF"}</p><h3>About this report</h3><p class="detail-summary">${escapeHtml(report.summary)}</p><a class="original-link" href="${escapeHtml(publicPdfUrl(report))}" target="_blank" rel="noopener">Open report PDF <span aria-hidden="true">↗</span></a>${sectionHtml}</div>`;
     const dialog = $("#report-dialog");
     if (!dialog.open) dialog.showModal();
     if (updateHash) history.replaceState(null, "", `#report=${encodeURIComponent(id)}`);
@@ -98,7 +95,7 @@ function renderAnswer(data) {
     const file = report ? `${publicPdfUrl(report)}#page=${item.page}` : "#";
     return `<article class="evidence-item"><div class="evidence-top"><a class="evidence-title" href="#report=${encodeURIComponent(item.report_id)}" data-open-report="${escapeHtml(item.report_id)}">${escapeHtml(item.title)}</a><a class="evidence-page" href="${escapeHtml(file)}" target="_blank" rel="noopener">p. ${item.page} ↗</a></div>${item.section && item.section !== "Report text" ? `<div class="evidence-section">${escapeHtml(item.section)}</div>` : ""}<p>${escapeHtml(item.content)}</p></article>`;
   }).join("");
-  area.innerHTML = `<section class="answer-block"><div class="answer-header"><h3>From the reports</h3></div><p class="answer-copy">${escapeHtml(data.answer)}</p>${evidence.length ? `<div class="evidence-list">${items}</div>` : ""}${data.warnings?.length ? `<p class="answer-warnings">Content note: ${data.warnings.map(escapeHtml).join(" ")}</p>` : ""}</section>`;
+  area.innerHTML = `<section class="answer-block"><div class="answer-header"><h3>From the reports</h3></div><p class="answer-copy">${escapeHtml(data.answer)}</p>${evidence.length ? `<div class="evidence-list">${items}</div>` : ""}</section>`;
 }
 
 function toast(text) {
