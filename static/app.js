@@ -34,7 +34,7 @@ async function loadReports(query = "") {
   const grid = $("#report-grid");
   grid.innerHTML = '<div class="loading-state">Searching the report library <span class="spinner" aria-hidden="true"></span></div>';
   if (!configured) {
-    grid.innerHTML = '<div class="empty-state"><h3>Connect the library</h3><p>Add your Supabase project URL and public anon key in <code>static/config.js</code>, then run the setup steps in the README.</p></div>';
+    grid.innerHTML = '<div class="empty-state"><h3>Reports are temporarily unavailable</h3><p>Please try again later.</p></div>';
     $("#stat-reports").textContent = "—";
     $("#result-count").textContent = "Setup required";
     return;
@@ -67,7 +67,7 @@ async function loadReports(query = "") {
     grid.hidden = empty;
   } catch (error) {
     grid.hidden = false;
-    grid.innerHTML = `<div class="empty-state"><h3>Library unavailable</h3><p>${escapeHtml(error.message || "Could not connect to Supabase.")}</p></div>`;
+    grid.innerHTML = '<div class="empty-state"><h3>Reports are temporarily unavailable</h3><p>Please refresh the page or try again later.</p></div>';
   }
 }
 
@@ -79,7 +79,7 @@ async function openReport(id, updateHash = true) {
     if (error) throw error;
     const detail = $("#report-detail");
     const warnings = Array.isArray(report.warnings) ? report.warnings : [];
-    const warningHtml = warnings.length ? `<p class="detail-warning"><strong>Extraction note.</strong> ${warnings.map(escapeHtml).join(" ")}</p>` : "";
+    const warningHtml = warnings.length ? `<p class="detail-warning"><strong>Content note.</strong> ${warnings.map(escapeHtml).join(" ")}</p>` : "";
     const authorLine = [report.authors, report.published, `${report.pages} pages`].filter(Boolean).map(escapeHtml).join(" · ");
     const sectionHtml = sections?.length ? `<h3>Report sections</h3><ul class="section-list">${sections.map(s => `<li><a href="${escapeHtml(`${publicPdfUrl(report)}#page=${s.first_page}`)}" target="_blank" rel="noopener">${escapeHtml(s.name)} <span>p. ${s.first_page} ↗</span></a></li>`).join("")}</ul>` : "";
     const source = report.source_url ? `<a class="text-link" href="${escapeHtml(report.source_url)}" target="_blank" rel="noopener">Original source page ↗</a>` : "";
@@ -87,7 +87,7 @@ async function openReport(id, updateHash = true) {
     const dialog = $("#report-dialog");
     if (!dialog.open) dialog.showModal();
     if (updateHash) history.replaceState(null, "", `#report=${encodeURIComponent(id)}`);
-  } catch (error) { toast(error.message || "Could not open report."); }
+  } catch (error) { toast("We couldn't open this report. Please try again."); }
 }
 
 function renderAnswer(data) {
@@ -98,7 +98,7 @@ function renderAnswer(data) {
     const file = report ? `${publicPdfUrl(report)}#page=${item.page}` : "#";
     return `<article class="evidence-item"><div class="evidence-top"><a class="evidence-title" href="#report=${encodeURIComponent(item.report_id)}" data-open-report="${escapeHtml(item.report_id)}">${escapeHtml(item.title)}</a><a class="evidence-page" href="${escapeHtml(file)}" target="_blank" rel="noopener">p. ${item.page} ↗</a></div>${item.section && item.section !== "Report text" ? `<div class="evidence-section">${escapeHtml(item.section)}</div>` : ""}<p>${escapeHtml(item.content)}</p></article>`;
   }).join("");
-  area.innerHTML = `<section class="answer-block"><div class="answer-header"><h3>From the reports</h3><span class="status-pill"><i></i> ${data.mode === "full_summary" ? "SECTION COVERAGE" : `${evidence.length} PASSAGE${evidence.length === 1 ? "" : "S"}`}</span></div><p class="answer-copy">${escapeHtml(data.answer)}</p>${evidence.length ? `<div class="evidence-list">${items}</div>` : ""}${data.warnings?.length ? `<p class="answer-warnings">Extraction limits: ${data.warnings.map(escapeHtml).join(" ")}</p>` : ""}</section>`;
+  area.innerHTML = `<section class="answer-block"><div class="answer-header"><h3>From the reports</h3></div><p class="answer-copy">${escapeHtml(data.answer)}</p>${evidence.length ? `<div class="evidence-list">${items}</div>` : ""}${data.warnings?.length ? `<p class="answer-warnings">Content note: ${data.warnings.map(escapeHtml).join(" ")}</p>` : ""}</section>`;
 }
 
 function toast(text) {
@@ -126,9 +126,9 @@ $("#ask-form").addEventListener("submit", async event => {
   event.preventDefault();
   const question = $("#question").value.trim();
   const area = $("#answer-area");
-  area.innerHTML = '<p class="ask-loading">Searching indexed report text <span class="spinner" aria-hidden="true"></span></p>';
+  area.innerHTML = '<p class="ask-loading">Looking through the reports <span class="spinner" aria-hidden="true"></span></p>';
   try {
-    if (!configured) throw new Error("Connect Supabase to search the reports.");
+    if (!configured) throw new Error("Question search is temporarily unavailable.");
     const titleMatch = state.reports.find(report => question.toLocaleLowerCase().includes(report.title.toLocaleLowerCase()) && /summari[sz]e|overview|about/i.test(question));
     if (titleMatch) {
       const [{ data: sections, error: sectionError }, { data: passages, error: chunkError }] = await Promise.all([
@@ -137,14 +137,14 @@ $("#ask-form").addEventListener("submit", async event => {
       ]);
       if (sectionError) throw sectionError;
       if (chunkError) throw chunkError;
-      renderAnswer({ mode: "full_summary", answer: `${titleMatch.summary}${sections?.length ? ` The indexed report covers ${sections.map(s => s.name).join(", ")}.` : ""}`, evidence: passages || [], warnings: titleMatch.warnings || [] });
+      renderAnswer({ mode: "full_summary", answer: `${titleMatch.summary}${sections?.length ? ` The report includes ${sections.map(s => s.name).join(", ")}.` : ""}`, evidence: passages || [], warnings: titleMatch.warnings || [] });
     } else {
       const { data, error } = await state.supabase.rpc("search_report_chunks", { query_text: question, result_limit: 12 });
       if (error) throw error;
       const evidence = (data || []).map(row => ({ ...row, title: state.reports.find(r => r.id === row.report_id)?.title || "TERI report" }));
-      renderAnswer({ answer: evidence.length ? "These are the closest matching passages in the indexed reports. Use the page links to check the source context." : "I could not find a passage that supports an answer in the indexed report text. Try different terms or search the collection.", evidence });
+      renderAnswer({ answer: evidence.length ? "Here are relevant passages from the reports. Select a page link to read more." : "We couldn't find a relevant passage. Try a different question or search the collection.", evidence });
     }
-  } catch (error) { area.innerHTML = `<p class="ask-error">${escapeHtml(error.message || "Search failed.")}</p>`; }
+  } catch (error) { area.innerHTML = '<p class="ask-error">We couldn\'t find an answer right now. Please try again later.</p>'; }
 });
 
 document.querySelectorAll("[data-question]").forEach(button => button.addEventListener("click", () => {
@@ -297,7 +297,7 @@ $("#upload-form").addEventListener("submit", async event => {
       if (result.error) throw result.error;
       message.textContent = `Indexing report text… ${Math.min(start + 200, chunks.length)} / ${chunks.length} passages`;
     }
-    message.textContent = `Added “${report.title}” · ${report.pages} pages indexed.${report.warnings.length ? ` Extraction note: ${report.warnings.join(" ")}` : ""}`;
+    message.textContent = `Added “${report.title}” · ${report.pages} pages.${report.warnings.length ? ` Content note: ${report.warnings.join(" ")}` : ""}`;
     fileInput.value = "";
     await loadReports($("#report-search").value.trim());
   } catch (error) {
@@ -342,7 +342,7 @@ if ("IntersectionObserver" in window) {
     const activeId = visible.target.id;
     document.querySelectorAll("[data-nav]").forEach(link => link.classList.toggle("active", link.dataset.nav === activeId));
   }, { rootMargin: "-28% 0px -58% 0px", threshold: [0, .15, .35] });
-  document.querySelectorAll("#library, #ask, #about").forEach(section => sectionObserver.observe(section));
+  document.querySelectorAll("#library, #ask").forEach(section => sectionObserver.observe(section));
 }
 
 loadReports().then(() => {
