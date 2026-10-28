@@ -1,6 +1,6 @@
 # TERI Reports Library
 
-A public site deployed with GitHub Pages. Supabase stores report PDFs and searchable report text and runs an Edge Function for report-grounded explanations. The function retrieves relevant page passages, sends only those passages and the question to the OpenAI Responses API, and returns an explanation with source-page citations. Admins sign in with Supabase Auth before uploading. PDF text extraction for new uploads happens in the admin's browser.
+A public site deployed with GitHub Pages. Supabase stores report PDFs and searchable report text and runs an Edge Function for report-grounded explanations. The function retrieves relevant page passages, sends only those passages and the question to the Gemini API, and returns an explanation with source-page citations. Admins sign in with Supabase Auth before uploading. PDF text extraction for new uploads happens in the admin's browser.
 
 ## Project layout
 
@@ -55,7 +55,7 @@ The workflow copies `static/config.js` into the published site. The Supabase ano
 ## Report-grounded explanations
 
 1. In Supabase **SQL Editor**, run `supabase/migrations/20261028_report_grounded_ai.sql` once. This adds a report-filtered search function and a private per-IP quota table/function. The Edge Function hashes the client IP before storing it and allows up to 12 explanation requests per IP per hour.
-2. Create an OpenAI API key for a project with API billing enabled. In the Supabase project dashboard, open **Edge Functions → Secrets** and add `OPENAI_API_KEY`. Do not put this key in GitHub, `static/config.js`, or chat. Optionally set `OPENAI_MODEL`; the default is `gpt-6-luna`.
+2. Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey). In the Supabase project dashboard, open **Edge Functions → Secrets** and add `GEMINI_API_KEY`. Do not put this key in GitHub, `static/config.js`, or chat. Optionally set `GEMINI_MODEL`; the default is `gemini-3.8-flash`.
 3. From this repository, install the Supabase CLI and link it to project `rgrzlzvhbxywbuvifrfi`, then deploy the function:
 
    ```powershell
@@ -65,11 +65,11 @@ The workflow copies `static/config.js` into the published site. The Supabase ano
 
    The function configuration disables the gateway's legacy JWT check for this public endpoint; the handler restricts browser origins, checks the project's publishable key, and enforces its own hourly quota. Keep the database migration and function deployed before publishing the frontend change.
 
-Each answer retrieves at most 10 matching passages, uses only those as model context, and cites the source labels with links to the cited PDF pages. It returns a no-evidence message instead of calling the model when search finds nothing. Report-level questions are filtered to that report in the database. This is retrieval at question time, not model training or persistent learning. Relevant report excerpts and the question are sent to OpenAI for each answer. Scanned/image-only pages remain outside the text index. OpenAI API usage is billed separately; the per-IP limit is a basic abuse guard, so set a project-level spending limit in the OpenAI dashboard as well.
+Each answer retrieves at most 10 matching passages, uses only those as model context, and cites the source labels with links to the cited PDF pages. It returns a no-evidence message instead of calling the model when search finds nothing. Report-level questions are filtered to that report in the database. This is retrieval at question time, not model training or persistent learning. Relevant report excerpts and the question are sent to Google Gemini for each answer. Scanned/image-only pages remain outside the text index. Gemini API usage may be billable; the per-IP limit is a basic abuse guard, so set any available project usage limits in Google AI Studio as well. Google documents that free-tier inputs may be used to improve its products, while paid-tier inputs are not; choose a paid tier if you don't want requests used for product improvement. See [Gemini API pricing and data-use terms](https://ai.google.dev/gemini-api/docs/pricing).
 
 ## Admin uploads
 
-Use **Admin** on the deployed site and sign in with an account listed in `public.library_admins`. New PDFs are limited to 50 MiB by the bucket. The browser extracts text page by page, uploads the unchanged PDF to Storage, and saves searchable passages to Postgres. PDF uploads are not automatically sent to the model; only passages retrieved for a visitor's explanation request are sent. Scanned pages without selectable text, charts and complex tables may not be fully searchable; OCR is not included.
+Use **Admin** on the deployed site and sign in with an account listed in `public.library_admins`. New PDFs are limited to 50 MiB by the bucket. The browser extracts text page by page, uploads the unchanged PDF to Storage, and saves searchable passages to Postgres. PDF uploads are not automatically sent to Gemini; only passages retrieved for a visitor's explanation request are sent. Scanned pages without selectable text, charts and complex tables may not be fully searchable; OCR is not included.
 
 ## Search and answers
 
